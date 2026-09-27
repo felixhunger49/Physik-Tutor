@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mr. Newton – dein Physik-Tutor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1e3b32; --bg-2:#182f28; --panel:#22443a;
+    --chalk:#f2efe4; --chalk-dim:#a9bdb4;
+    --yellow:#e7b84b; --blue:#8fc4d8;
+    --border:rgba(242,239,228,.14);
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:inherit}
+  html{scroll-padding-top:env(safe-area-inset-top,0px); height:100%}
+  body{
+    margin:0; height:100%; background:var(--bg); color:var(--chalk);
+    font-family:'Inter',sans-serif; display:flex; flex-direction:column;
+    background-image:
+      radial-gradient(rgba(255,255,255,.03) 1px, transparent 1px);
+    background-size:4px 4px;
+  }
+  header{
+    display:flex; align-items:center; gap:14px;
+    padding:calc(env(safe-area-inset-top,0px) + 14px) 18px 14px;
+    border-bottom:1px dashed var(--border);
+    background:var(--bg-2); position:sticky; top:0; z-index:5;
+  }
+  .avatar-wrap{flex-shrink:0}
+  h1{font-family:'Kalam',cursive; font-size:1.5rem; margin:0; font-weight:700}
+  .sub{color:var(--chalk-dim); font-size:.85rem; margin-top:2px}
+  .gear{margin-left:auto; background:none; border:1px solid var(--border); color:var(--chalk);
+    width:38px; height:38px; border-radius:50%; cursor:pointer; font-size:1.1rem; flex-shrink:0}
+  .gear:hover{border-color:var(--yellow)}
+
+  #settings{
+    background:var(--bg-2); border-bottom:1px dashed var(--border);
+    padding:14px 18px; display:none; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  #settings.open{display:flex}
+  #settings label{font-size:.85rem; color:var(--chalk-dim)}
+  #settings input{
+    flex:1; min-width:180px; background:var(--panel); border:1px solid var(--border);
+    color:var(--chalk); padding:8px 10px; border-radius:6px; font-family:inherit; font-size:.9rem;
+  }
+  #settings button{
+    background:var(--yellow); color:#1e3b32; border:none; padding:8px 14px;
+    border-radius:6px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  #settingsHint{width:100%; font-size:.78rem; color:var(--chalk-dim); margin:0}
+
+  main{flex:1; overflow-y:auto; padding:20px 18px; display:flex; flex-direction:column; gap:14px}
+  .msg{max-width:80%; padding:10px 14px; border-radius:14px; line-height:1.45; font-size:.95rem; white-space:pre-wrap}
+  .msg.bot{align-self:flex-start; background:var(--panel); border:1px solid var(--border); border-top-left-radius:3px}
+  .msg.user{align-self:flex-end; background:var(--yellow); color:#20261b; border-top-right-radius:3px}
+  .msg.err{align-self:center; color:#e79b9b; font-size:.85rem; font-style:italic}
+
+  footer{
+    display:flex; gap:8px; padding:12px 14px calc(env(safe-area-inset-bottom,0px) + 12px);
+    border-top:1px dashed var(--border); background:var(--bg-2);
+  }
+  #mic, #send{
+    border:1px solid var(--border); background:var(--panel); color:var(--chalk);
+    width:44px; height:44px; border-radius:50%; flex-shrink:0; cursor:pointer; font-size:1.15rem;
+  }
+  #mic.listening{background:var(--yellow); color:#1e3b32; border-color:var(--yellow)}
+  #send{background:var(--yellow); color:#1e3b32; font-weight:700}
+  #textInput{
+    flex:1; background:var(--panel); border:1px solid var(--border); color:var(--chalk);
+    border-radius:22px; padding:0 16px; font-family:inherit; font-size:.95rem;
+  }
+  #textInput:focus{outline:2px solid var(--blue)}
+  button:focus-visible, input:focus-visible{outline:2px solid var(--blue)}
+
+  @media (prefers-reduced-motion:no-preference){
+    .mouth{transition:height .12s ease, y .12s ease}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="avatar-wrap">
+    <svg id="avatarSvg" width="52" height="52" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="46" fill="none" stroke="var(--chalk)" stroke-width="3" stroke-dasharray="6 5" opacity=".8"/>
+      <circle cx="36" cy="45" r="4" fill="var(--chalk)"/>
+      <circle cx="64" cy="45" r="4" fill="var(--chalk)"/>
+      <path d="M28 62 Q50 58 72 62" stroke="var(--chalk)" stroke-width="3" fill="none" opacity=".6"/>
+      <rect id="mouth" class="mouth" x="40" y="66" width="20" height="4" rx="2" fill="var(--yellow)"/>
+    </svg>
+  </div>
+  <div>
+    <h1>Mr. Newton</h1>
+    <div class="sub">dein Physik-Tutor</div>
+  </div>
+  <button class="gear" id="gearBtn" aria-label="Einstellungen" title="Einstellungen">⚙</button>
+</header>
+
+<div id="settings">
+  <label for="apiKey">Gemini API-Key</label>
+  <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off">
+  <button id="saveKey">Speichern</button>
+  <p id="settingsHint">Dein Key bleibt nur in diesem Browser gespeichert. Einen kostenlosen Key gibt's in Google AI Studio.</p>
+</div>
+
+<main id="chat"></main>
+
+<footer>
+  <button id="mic" aria-label="Spracheingabe" title="Spracheingabe">🎤</button>
+  <input id="textInput" type="text" placeholder="Stell mir eine Physikfrage…" autocomplete="off">
+  <button id="send" aria-label="Senden" title="Senden">➤</button>
+</footer>
+
+<script>
+(function(){
+  const chat = document.getElementById('chat');
+  const textInput = document.getElementById('textInput');
+  const sendBtn = document.getElementById('send');
+  const micBtn = document.getElementById('mic');
+  const gearBtn = document.getElementById('gearBtn');
+  const settings = document.getElementById('settings');
+  const apiKeyInput = document.getElementById('apiKey');
+  const saveKeyBtn = document.getElementById('saveKey');
+  const mouth = document.getElementById('mouth');
+
+  let apiKey = '';
+  try { apiKey = localStorage.getItem('newtonGeminiKey') || ''; } catch(e){}
+  if (apiKey) apiKeyInput.value = apiKey;
+  else settings.classList.add('open');
+
+  gearBtn.addEventListener('click', () => settings.classList.toggle('open'));
+  saveKeyBtn.addEventListener('click', () => {
+    apiKey = apiKeyInput.value.trim();
+    try { localStorage.setItem('newtonGeminiKey', apiKey); } catch(e){}
+    if (apiKey) settings.classList.remove('open');
+  });
+
+  const history = [];
+
+  function addMsg(text, role){
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  addMsg('Hallo, schön dass du hier bist! Stell mir einfach eine Physikfrage :)', 'bot');
+
+  function setSpeaking(on){
+    if (on){
+      mouth.setAttribute('y', '65'); mouth.setAttribute('height', '7');
+    } else {
+      mouth.setAttribute('y', '66'); mouth.setAttribute('height', '4');
+    }
+  }
+
+  function speak(text){
+    if (!('speechSynthesis' in window)) return;
+    try{
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'de-DE';
+      let iv;
+      u.onstart = () => { iv = setInterval(() => setSpeaking(Math.random() > .4), 130); };
+      u.onend = u.onerror = () => { clearInterval(iv); setSpeaking(false); };
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+
+  const SYSTEM_PROMPT = 'Du bist Mr. Newton, ein freundlicher, geduldiger Physik-Tutor für Schülerinnen und Schüler. ' +
+    'Erkläre Konzepte einfach und in Schritten, nutze Alltagsbeispiele, stelle gelegentlich eine Rückfrage, ' +
+    'um das Verständnis zu prüfen. Antworte auf Deutsch, in kurzen Absätzen, ohne Markdown-Formatierung.';
+
+  async function askGemini(userText){
+    if (!apiKey){
+      addMsg('Bitte trage zuerst deinen kostenlosen Gemini API-Key oben unter ⚙ ein.', 'err');
+      settings.classList.add('open');
+      return;
+    }
+    history.push({ role: 'user', parts: [{ text: userText }] });
+    const thinking = addMsg('…', 'bot');
+    try{
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: history
+        })
+      });
+      const data = await res.json();
+      if (!res.ok){
+        throw new Error(data?.error?.message || ('HTTP ' + res.status));
+      }
+      const answer = data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '(keine Antwort erhalten)';
+      thinking.textContent = answer;
+      history.push({ role: 'model', parts: [{ text: answer }] });
+      chat.scrollTop = chat.scrollHeight;
+      speak(answer);
+    }catch(e){
+      thinking.remove();
+      addMsg('Fehler beim Abrufen der Antwort: ' + e.message, 'err');
+      history.pop();
+    }
+  }
+
+  function sendCurrent(){
+    const text = textInput.value.trim();
+    if (!text) return;
+    addMsg(text, 'user');
+    textInput.value = '';
+    askGemini(text);
+  }
+
+  sendBtn.addEventListener('click', sendCurrent);
+  textInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendCurrent(); });
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR){
+    const rec = new SR();
+    rec.lang = 'de-DE';
+    rec.interimResults = false;
+    let listening = false;
+    micBtn.addEventListener('click', () => {
+      if (listening) { rec.stop(); return; }
+      try { rec.start(); listening = true; micBtn.classList.add('listening'); }
+      catch(e){}
+    });
+    rec.onresult = (ev) => {
+      textInput.value = ev.results[0][0].transcript;
+      sendCurrent();
+    };
+    rec.onend = () => { listening = false; micBtn.classList.remove('listening'); };
+    rec.onerror = () => { listening = false; micBtn.classList.remove('listening'); };
+  } else {
+    micBtn.disabled = true;
+    micBtn.title = 'Spracheingabe wird von diesem Browser nicht unterstützt';
+  }
+})();
+</script>
+</body>
+</html>
