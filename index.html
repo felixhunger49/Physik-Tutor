@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Herr Hunger`s kleiner Helfer – dein Physik-Tutor</title>
+<title>Herr Hungers kleiner Helfer – dein Physik-Tutor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#1e3b32; --bg-2:#182f28; --panel:#22443a;
-    --chalk:#f2efe4; --chalk-dim:#a9bdb4;
-    --yellow:#e7b84b; --blue:#8fc4d8;
-    --border:rgba(242,239,228,.14);
+    --bg:#152e28; --bg-2:#102520; --panel:#1c3d34;
+    --chalk:#f3efe3; --chalk-dim:#9db2a8;
+    --yellow:#eab54c; --blue:#7fc4dc; --coral:#e2896a;
+    --border:rgba(243,239,227,.14);
     box-sizing:border-box;
     padding-top:env(safe-area-inset-top,0px);
     padding-bottom:env(safe-area-inset-bottom,0px);
@@ -21,8 +21,7 @@
   body{
     margin:0; height:100%; background:var(--bg); color:var(--chalk);
     font-family:'Inter',sans-serif; display:flex; flex-direction:column;
-    background-image:
-      radial-gradient(rgba(255,255,255,.03) 1px, transparent 1px);
+    background-image:radial-gradient(rgba(255,255,255,.035) 1px, transparent 1px);
     background-size:4px 4px;
   }
   header{
@@ -31,9 +30,8 @@
     border-bottom:1px dashed var(--border);
     background:var(--bg-2); position:sticky; top:0; z-index:5;
   }
-  .avatar-wrap{flex-shrink:0}
-  h1{font-family:'Kalam',cursive; font-size:1.5rem; margin:0; font-weight:700}
-  .sub{color:var(--chalk-dim); font-size:.85rem; margin-top:2px}
+  h1{font-family:'Kalam',cursive; font-size:1.4rem; margin:0; font-weight:700; line-height:1.15}
+  .sub{color:var(--chalk-dim); font-size:.82rem; margin-top:2px}
   .gear{margin-left:auto; background:none; border:1px solid var(--border); color:var(--chalk);
     width:38px; height:38px; border-radius:50%; cursor:pointer; font-size:1.1rem; flex-shrink:0}
   .gear:hover{border-color:var(--yellow)}
@@ -49,13 +47,28 @@
     color:var(--chalk); padding:8px 10px; border-radius:6px; font-family:inherit; font-size:.9rem;
   }
   #settings button{
-    background:var(--yellow); color:#1e3b32; border:none; padding:8px 14px;
+    background:var(--yellow); color:#17322b; border:none; padding:8px 14px;
     border-radius:6px; font-weight:600; cursor:pointer; font-family:inherit;
   }
   #settingsHint{width:100%; font-size:.78rem; color:var(--chalk-dim); margin:0}
 
-  main{flex:1; overflow-y:auto; padding:20px 18px; display:flex; flex-direction:column; gap:14px}
-  .msg{max-width:80%; padding:10px 14px; border-radius:14px; line-height:1.45; font-size:.95rem; white-space:pre-wrap}
+  nav{display:flex; gap:0; background:var(--bg-2); border-bottom:1px solid var(--border)}
+  nav button{
+    flex:1; background:none; border:none; color:var(--chalk-dim); font-family:'Kalam',cursive;
+    font-size:1.05rem; padding:10px 4px 12px; cursor:pointer; border-bottom:3px solid transparent;
+  }
+  nav button.active{color:var(--chalk); border-bottom-color:var(--accent,var(--yellow))}
+  nav button[data-tab="chat"].active{--accent:var(--yellow)}
+  nav button[data-tab="diagram"].active{--accent:var(--blue)}
+  nav button[data-tab="task"].active{--accent:var(--coral)}
+
+  main{flex:1; overflow-y:auto; display:flex; flex-direction:column; min-height:0}
+  .panel{display:none; flex:1; min-height:0; flex-direction:column; overflow-y:auto; padding:18px}
+  .panel.active{display:flex}
+
+  /* Chat */
+  #chatLog{flex:1; display:flex; flex-direction:column; gap:12px}
+  .msg{max-width:82%; padding:10px 14px; border-radius:14px; line-height:1.45; font-size:.95rem; white-space:pre-wrap}
   .msg.bot{align-self:flex-start; background:var(--panel); border:1px solid var(--border); border-top-left-radius:3px}
   .msg.user{align-self:flex-end; background:var(--yellow); color:#20261b; border-top-right-radius:3px}
   .msg.err{align-self:center; color:#e79b9b; font-size:.85rem; font-style:italic}
@@ -68,34 +81,51 @@
     border:1px solid var(--border); background:var(--panel); color:var(--chalk);
     width:44px; height:44px; border-radius:50%; flex-shrink:0; cursor:pointer; font-size:1.15rem;
   }
-  #mic.listening{background:var(--yellow); color:#1e3b32; border-color:var(--yellow)}
-  #send{background:var(--yellow); color:#1e3b32; font-weight:700}
+  #mic.listening{background:var(--yellow); color:#17322b; border-color:var(--yellow)}
+  #send{background:var(--yellow); color:#17322b; font-weight:700}
   #textInput{
     flex:1; background:var(--panel); border:1px solid var(--border); color:var(--chalk);
     border-radius:22px; padding:0 16px; font-family:inherit; font-size:.95rem;
   }
-  #textInput:focus{outline:2px solid var(--blue)}
-  button:focus-visible, input:focus-visible{outline:2px solid var(--blue)}
 
-  @media (prefers-reduced-motion:no-preference){
-    .mouth{transition:height .12s ease, y .12s ease}
+  /* shared form bits */
+  .box{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px}
+  .box h2{font-family:'Kalam',cursive; margin:0 0 8px; font-size:1.15rem}
+  .box p.hint{color:var(--chalk-dim); font-size:.82rem; margin:4px 0 10px}
+  textarea, .box input[type="text"], select{
+    width:100%; background:var(--bg-2); border:1px solid var(--border); color:var(--chalk);
+    border-radius:8px; padding:8px 10px; font-family:'JetBrains Mono',monospace; font-size:.85rem;
   }
+  select{font-family:'Inter',sans-serif}
+  .actionBtn{
+    border:none; padding:10px 18px; border-radius:8px; font-weight:600; cursor:pointer;
+    font-family:'Inter',sans-serif; margin-top:10px;
+  }
+  #plotBtn{background:var(--blue); color:#0d2b34}
+  #newTaskBtn, #checkAnswerBtn{background:var(--coral); color:#3a180c}
+  #taskArea{margin-top:10px}
+  #taskText{font-size:.92rem; line-height:1.5}
+  #taskFeedback{margin-top:10px; font-size:.92rem; line-height:1.5; white-space:pre-wrap}
+  svg#chartSvg{width:100%; height:auto; background:var(--bg-2); border-radius:8px}
+
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{outline:2px solid var(--blue)}
+
+  @media (prefers-reduced-motion:no-preference){ .mouth{transition:height .12s ease, y .12s ease} }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="avatar-wrap">
-    <svg id="avatarSvg" width="52" height="52" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="46" fill="none" stroke="var(--chalk)" stroke-width="3" stroke-dasharray="6 5" opacity=".8"/>
-      <circle cx="36" cy="45" r="4" fill="var(--chalk)"/>
-      <circle cx="64" cy="45" r="4" fill="var(--chalk)"/>
-      <path d="M28 62 Q50 58 72 62" stroke="var(--chalk)" stroke-width="3" fill="none" opacity=".6"/>
-      <rect id="mouth" class="mouth" x="40" y="66" width="20" height="4" rx="2" fill="var(--yellow)"/>
-    </svg>
-  </div>
+  <svg width="48" height="48" viewBox="0 0 100 100" aria-hidden="true" style="flex-shrink:0">
+    <path d="M28 34 L50 18 L72 34 L50 42 Z" fill="var(--chalk)" opacity=".85"/>
+    <line x1="72" y1="34" x2="72" y2="50" stroke="var(--chalk)" stroke-width="2" opacity=".7"/>
+    <circle cx="50" cy="58" r="30" fill="none" stroke="var(--chalk)" stroke-width="3" stroke-dasharray="6 5" opacity=".8"/>
+    <circle cx="39" cy="55" r="3.5" fill="var(--chalk)"/>
+    <circle cx="61" cy="55" r="3.5" fill="var(--chalk)"/>
+    <rect id="mouth" class="mouth" x="40" y="70" width="20" height="4" rx="2" fill="var(--yellow)"/>
+  </svg>
   <div>
-    <h1>Herr Hunger`s kleiner Helfer</h1>
+    <h1>Herr Hungers kleiner Helfer</h1>
     <div class="sub">dein Physik-Tutor</div>
   </div>
   <button class="gear" id="gearBtn" aria-label="Einstellungen" title="Einstellungen">⚙</button>
@@ -108,9 +138,70 @@
   <p id="settingsHint">Dein Key bleibt nur in diesem Browser gespeichert. Einen kostenlosen Key gibt's in Google AI Studio.</p>
 </div>
 
-<main id="chat"></main>
+<nav>
+  <button class="active" data-tab="chat">💬 Chat</button>
+  <button data-tab="diagram">📊 Diagramm</button>
+  <button data-tab="task">📝 Aufgabe</button>
+</nav>
 
-<footer>
+<main>
+  <section class="panel active" id="panel-chat">
+    <div id="chatLog"></div>
+  </section>
+
+  <section class="panel" id="panel-diagram">
+    <div class="box">
+      <h2>Messdaten plotten</h2>
+      <p class="hint">Ein Wertepaar pro Zeile, x und y durch Komma getrennt. Beispiel für einen freien Fall:<br>0,0
+0.2,0.2
+0.4,0.78
+0.6,1.76</p>
+      <textarea id="dataInput" rows="6" placeholder="0,0
+0.2,0.2
+0.4,0.78"></textarea>
+      <input type="text" id="chartLabel" placeholder="Achsentitel, z. B. Zeit (s) / Strecke (m)" style="margin-top:8px">
+      <button class="actionBtn" id="plotBtn">Diagramm erstellen</button>
+    </div>
+    <div id="chartWrap" style="display:none">
+      <svg id="chartSvg" viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-task">
+    <div class="box">
+      <h2>Physikaufgabe üben</h2>
+      <p class="hint">Wähle ein Thema und eine Schwierigkeit, dann bekommst du eine Aufgabe gestellt.</p>
+      <select id="taskTopic">
+        <option>Mechanik / Kinematik</option>
+        <option>Kräfte &amp; Newtonsche Gesetze</option>
+        <option>Energie &amp; Arbeit</option>
+        <option>Elektrizität</option>
+        <option>Optik</option>
+        <option>Wärmelehre</option>
+      </select>
+      <select id="taskLevel" style="margin-top:8px">
+        <option>leicht</option>
+        <option>mittel</option>
+        <option>schwer</option>
+      </select>
+      <button class="actionBtn" id="newTaskBtn">Neue Aufgabe stellen</button>
+    </div>
+    <div id="taskArea" style="display:none">
+      <div class="box">
+        <h2>Aufgabe</h2>
+        <div id="taskText"></div>
+      </div>
+      <div class="box">
+        <h2>Deine Antwort</h2>
+        <textarea id="answerInput" rows="3" placeholder="Trag hier deinen Lösungsweg und dein Ergebnis ein…"></textarea>
+        <button class="actionBtn" id="checkAnswerBtn">Antwort prüfen</button>
+        <div id="taskFeedback"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer id="chatFooter">
   <button id="mic" aria-label="Spracheingabe" title="Spracheingabe">🎤</button>
   <input id="textInput" type="text" placeholder="Stell mir eine Physikfrage…" autocomplete="off">
   <button id="send" aria-label="Senden" title="Senden">➤</button>
@@ -118,7 +209,7 @@
 
 <script>
 (function(){
-  const chat = document.getElementById('chat');
+  const chatLog = document.getElementById('chatLog');
   const textInput = document.getElementById('textInput');
   const sendBtn = document.getElementById('send');
   const micBtn = document.getElementById('mic');
@@ -127,6 +218,7 @@
   const apiKeyInput = document.getElementById('apiKey');
   const saveKeyBtn = document.getElementById('saveKey');
   const mouth = document.getElementById('mouth');
+  const chatFooter = document.getElementById('chatFooter');
 
   let apiKey = '';
   try { apiKey = localStorage.getItem('newtonGeminiKey') || ''; } catch(e){}
@@ -140,27 +232,21 @@
     if (apiKey) settings.classList.remove('open');
   });
 
-  const history = [];
-
-  function addMsg(text, role){
-    const div = document.createElement('div');
-    div.className = 'msg ' + role;
-    div.textContent = text;
-    chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
-    return div;
-  }
-
-  addMsg('Hallo, schön dass du hier bist! Stell mir einfach eine Physikfrage :)', 'bot');
+  // Tabs
+  const tabs = document.querySelectorAll('nav button');
+  const panels = { chat: document.getElementById('panel-chat'), diagram: document.getElementById('panel-diagram'), task: document.getElementById('panel-task') };
+  tabs.forEach(btn => btn.addEventListener('click', () => {
+    tabs.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    Object.values(panels).forEach(p => p.classList.remove('active'));
+    panels[btn.dataset.tab].classList.add('active');
+    chatFooter.style.display = btn.dataset.tab === 'chat' ? 'flex' : 'none';
+  }));
 
   function setSpeaking(on){
-    if (on){
-      mouth.setAttribute('y', '65'); mouth.setAttribute('height', '7');
-    } else {
-      mouth.setAttribute('y', '66'); mouth.setAttribute('height', '4');
-    }
+    if (on){ mouth.setAttribute('y','69'); mouth.setAttribute('height','7'); }
+    else { mouth.setAttribute('y','70'); mouth.setAttribute('height','4'); }
   }
-
   function speak(text){
     if (!('speechSynthesis' in window)) return;
     try{
@@ -174,51 +260,56 @@
     }catch(e){}
   }
 
-  const SYSTEM_PROMPT = 'Du bist Herr Hunger`s kleiner Helfer, ein freundlicher, geduldiger Physik-Tutor für Schülerinnen und Schüler. ' +
-    'Erkläre Konzepte einfach und in Schritten, nutze Alltagsbeispiele, stelle gelegentlich eine Rückfrage, ' +
-    'um das Verständnis zu prüfen. Antworte auf Deutsch, in kurzen Absätzen, ohne Markdown-Formatierung.';
-
-  async function askGemini(userText){
+  async function callGemini(systemPrompt, contents){
     if (!apiKey){
-      addMsg('Bitte trage zuerst deinen kostenlosen Gemini API-Key oben unter ⚙ ein.', 'err');
       settings.classList.add('open');
-      return;
+      throw new Error('Bitte zuerst einen Gemini API-Key unter ⚙ eintragen.');
     }
-    history.push({ role: 'user', parts: [{ text: userText }] });
-    const thinking = addMsg('…', 'bot');
-    try{
-      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: history
-        })
-      });
-      const data = await res.json();
-      if (!res.ok){
-        throw new Error(data?.error?.message || ('HTTP ' + res.status));
-      }
-      const answer = data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '(keine Antwort erhalten)';
-      thinking.textContent = answer;
-      history.push({ role: 'model', parts: [{ text: answer }] });
-      chat.scrollTop = chat.scrollHeight;
-      speak(answer);
-    }catch(e){
-      thinking.remove();
-      addMsg('Fehler beim Abrufen der Antwort: ' + e.message, 'err');
-      history.pop();
-    }
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt }] }, contents })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error?.message || ('HTTP ' + res.status));
+    return data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '(keine Antwort erhalten)';
   }
 
-  function sendCurrent(){
+  // ---- Chat ----
+  const chatHistory = [];
+  function addMsg(text, role){
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.textContent = text;
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+    return div;
+  }
+  addMsg('Hallo, schön dass du hier bist! Stell mir einfach eine Physikfrage, oder schau dir oben die Reiter „Diagramm“ und „Aufgabe“ an :)', 'bot');
+
+  const CHAT_SYSTEM = 'Du bist Herr Hungers kleiner Helfer, ein freundlicher, geduldiger Physik-Tutor für Schülerinnen und Schüler. ' +
+    'Erkläre Konzepte einfach und in Schritten, nutze Alltagsbeispiele, stelle gelegentlich eine Rückfrage. ' +
+    'Antworte auf Deutsch, in kurzen Absätzen, ohne Markdown-Formatierung.';
+
+  async function sendCurrent(){
     const text = textInput.value.trim();
     if (!text) return;
     addMsg(text, 'user');
     textInput.value = '';
-    askGemini(text);
+    chatHistory.push({ role: 'user', parts: [{ text }] });
+    const thinking = addMsg('…', 'bot');
+    try{
+      const answer = await callGemini(CHAT_SYSTEM, chatHistory);
+      thinking.textContent = answer;
+      chatHistory.push({ role: 'model', parts: [{ text: answer }] });
+      chatLog.scrollTop = chatLog.scrollHeight;
+      speak(answer);
+    }catch(e){
+      thinking.remove();
+      addMsg('Fehler: ' + e.message, 'err');
+      chatHistory.pop();
+    }
   }
-
   sendBtn.addEventListener('click', sendCurrent);
   textInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendCurrent(); });
 
@@ -230,19 +321,77 @@
     let listening = false;
     micBtn.addEventListener('click', () => {
       if (listening) { rec.stop(); return; }
-      try { rec.start(); listening = true; micBtn.classList.add('listening'); }
-      catch(e){}
+      try { rec.start(); listening = true; micBtn.classList.add('listening'); } catch(e){}
     });
-    rec.onresult = (ev) => {
-      textInput.value = ev.results[0][0].transcript;
-      sendCurrent();
-    };
+    rec.onresult = (ev) => { textInput.value = ev.results[0][0].transcript; sendCurrent(); };
     rec.onend = () => { listening = false; micBtn.classList.remove('listening'); };
     rec.onerror = () => { listening = false; micBtn.classList.remove('listening'); };
   } else {
     micBtn.disabled = true;
     micBtn.title = 'Spracheingabe wird von diesem Browser nicht unterstützt';
   }
+
+  // ---- Diagramm ----
+  document.getElementById('plotBtn').addEventListener('click', () => {
+    const raw = document.getElementById('dataInput').value.trim();
+    const label = document.getElementById('chartLabel').value.trim();
+    const pts = raw.split('\n').map(l => l.split(',').map(Number)).filter(p => p.length === 2 && p.every(n => !isNaN(n)));
+    if (pts.length < 2){ alert('Bitte mindestens zwei gültige Wertepaare eingeben (x,y pro Zeile).'); return; }
+    drawChart(pts, label);
+  });
+
+  function drawChart(pts, label){
+    const svg = document.getElementById('chartSvg');
+    document.getElementById('chartWrap').style.display = 'block';
+    const W = 400, H = 260, PAD = 34;
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const xMin = Math.min(...xs), xMax = Math.max(...xs);
+    const yMin = Math.min(0, ...ys), yMax = Math.max(...ys);
+    const xr = (xMax - xMin) || 1, yr = (yMax - yMin) || 1;
+    const sx = x => PAD + (x - xMin) / xr * (W - 2 * PAD);
+    const sy = y => H - PAD - (y - yMin) / yr * (H - 2 * PAD);
+    let s = '';
+    s += `<line x1="${PAD}" y1="${H-PAD}" x2="${W-PAD}" y2="${H-PAD}" stroke="var(--chalk-dim)" stroke-width="1"/>`;
+    s += `<line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${H-PAD}" stroke="var(--chalk-dim)" stroke-width="1"/>`;
+    const poly = pts.map(p => sx(p[0]) + ',' + sy(p[1])).join(' ');
+    s += `<polyline points="${poly}" fill="none" stroke="var(--blue)" stroke-width="2.5"/>`;
+    pts.forEach(p => { s += `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="4" fill="var(--yellow)"/>`; });
+    if (label){ s += `<text x="${W/2}" y="16" fill="var(--chalk)" font-size="11" text-anchor="middle" font-family="Inter">${label.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</text>`; }
+    svg.innerHTML = s;
+  }
+
+  // ---- Aufgabe ----
+  let currentTask = '';
+  document.getElementById('newTaskBtn').addEventListener('click', async () => {
+    const topic = document.getElementById('taskTopic').value;
+    const level = document.getElementById('taskLevel').value;
+    const taskTextEl = document.getElementById('taskText');
+    const taskArea = document.getElementById('taskArea');
+    taskArea.style.display = 'block';
+    taskTextEl.textContent = 'Aufgabe wird erstellt…';
+    document.getElementById('taskFeedback').textContent = '';
+    document.getElementById('answerInput').value = '';
+    try{
+      const prompt = 'Formuliere genau eine Physik-Übungsaufgabe zum Thema "' + topic + '" im Schwierigkeitsgrad "' + level +
+        '" für Schülerinnen und Schüler. Nur die Aufgabenstellung, keine Lösung, keine Einleitung, kein Markdown.';
+      currentTask = await callGemini('Du bist Herr Hungers kleiner Helfer, ein Physik-Tutor, der klare Übungsaufgaben stellt.', [{ role: 'user', parts: [{ text: prompt }] }]);
+      taskTextEl.textContent = currentTask;
+    }catch(e){ taskTextEl.textContent = 'Fehler: ' + e.message; }
+  });
+
+  document.getElementById('checkAnswerBtn').addEventListener('click', async () => {
+    const answer = document.getElementById('answerInput').value.trim();
+    const fb = document.getElementById('taskFeedback');
+    if (!answer){ fb.textContent = 'Bitte trag zuerst eine Antwort ein.'; return; }
+    fb.textContent = 'Wird geprüft…';
+    try{
+      const prompt = 'Aufgabe: ' + currentTask + '\n\nAntwort der Schülerin/des Schülers: ' + answer +
+        '\n\nPrüfe die Antwort. Sag zuerst kurz, ob sie richtig ist, dann erkläre freundlich den richtigen Lösungsweg. Auf Deutsch, ohne Markdown.';
+      const result = await callGemini('Du bist Herr Hungers kleiner Helfer, ein geduldiger Physik-Tutor, der Antworten konstruktiv bewertet.', [{ role: 'user', parts: [{ text: prompt }] }]);
+      fb.textContent = result;
+      speak(result);
+    }catch(e){ fb.textContent = 'Fehler: ' + e.message; }
+  });
 })();
 </script>
 </body>
