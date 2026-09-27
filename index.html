@@ -412,7 +412,11 @@
     s += `<line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${H-PAD}" stroke="var(--chalk-dim)" stroke-width="1"/>`;
     const poly = pts.map(p => sx(p[0]) + ',' + sy(p[1])).join(' ');
     s += `<polyline points="${poly}" fill="none" stroke="var(--blue)" stroke-width="2.5"/>`;
-    pts.forEach(p => { s += `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="4" fill="var(--yellow)"/>`; });
+    pts.forEach(p => {
+  const cx = sx(p[0]), cy = sy(p[1]), cs = 3.5;
+  s += `<line x1="${cx-cs}" y1="${cy-cs}" x2="${cx+cs}" y2="${cy+cs}" stroke="var(--yellow)" stroke-width="1.3"/>`;
+  s += `<line x1="${cx-cs}" y1="${cy+cs}" x2="${cx+cs}" y2="${cy-cs}" stroke="var(--yellow)" stroke-width="1.3"/>`;
+});
     if (label){ s += `<text x="${W/2}" y="16" fill="var(--chalk)" font-size="11" text-anchor="middle" font-family="Inter">${label.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</text>`; }
     svg.innerHTML = s;
   }
