@@ -109,12 +109,18 @@
   svg#chartSvg{width:100%; height:auto; background:var(--bg-2); border-radius:8px}
 
   button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{outline:2px solid var(--blue)}
-
 </style>
 </head>
 <body>
 
-
+<header>
+  <div id="avatar3d" style="width:84px;height:84px;flex-shrink:0"></div>
+  <div>
+    <h1>Herr Hungers kleiner Helfer</h1>
+    <div class="sub">dein Physik-Tutor</div>
+  </div>
+  <button class="gear" id="gearBtn" aria-label="Einstellungen" title="Einstellungen">⚙</button>
+</header>
 
 <div id="settings">
   <label for="apiKey">Gemini API-Key</label>
@@ -137,10 +143,7 @@
   <section class="panel" id="panel-diagram">
     <div class="box">
       <h2>Messdaten plotten</h2>
-      <p class="hint">Ein Wertepaar pro Zeile, x und y durch Komma getrennt. Beispiel für einen freien Fall:<br>0,0
-0.2,0.2
-0.4,0.78
-0.6,1.76</p>
+      <p class="hint">Ein Wertepaar pro Zeile, x und y durch Komma getrennt. Beispiel für einen freien Fall:<br>0,0<br>0.2,0.2<br>0.4,0.78<br>0.6,1.76</p>
       <textarea id="dataInput" rows="6" placeholder="0,0
 0.2,0.2
 0.4,0.78"></textarea>
@@ -192,6 +195,7 @@
   <button id="send" aria-label="Senden" title="Senden">➤</button>
 </footer>
 
+<!-- Three.js Bibliothek -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function(){
@@ -205,7 +209,6 @@
   const saveKeyBtn = document.getElementById('saveKey');
   const chatFooter = document.getElementById('chatFooter');
 
-  
   let apiKey = '';
   try { apiKey = localStorage.getItem('newtonGeminiKey') || ''; } catch(e){}
   if (apiKey) apiKeyInput.value = apiKey;
@@ -229,7 +232,138 @@
     chatFooter.style.display = btn.dataset.tab === 'chat' ? 'flex' : 'none';
   }));
 
+  let speaking3d = false;
   function setSpeaking(on){ speaking3d = on; }
+  
+  // ---- 3D Comic-Wissenschaftler Avatar Initialisierung ----
+  function initAvatar3D(){
+    const container = document.getElementById('avatar3d');
+    if (!container || typeof THREE === 'undefined') return;
+    let renderer;
+    try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); }
+    catch(e){ return; }
+    const w = 84, h = 84;
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(32, w / h, 0.1, 100);
+    camera.position.set(0, 0, 7.0);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const light = new THREE.DirectionalLight(0xffffff, 1.2);
+    light.position.set(2, 4, 5);
+    scene.add(light);
+
+    const head = new THREE.Group();
+    
+    const skinColor = 0xf5d0b1;
+    const hairColor = 0xcccccc;
+    const coatColor = 0xf3efe3;
+    const tieColor = 0xe2896a;
+    const glassesColor = 0x333333;
+
+    // Kopf-Basis
+    const headMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(1.2, 32, 32),
+      new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6 })
+    );
+    headMesh.scale.set(0.95, 1.1, 0.95);
+    head.add(headMesh);
+
+    // Haarkranz
+    const hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.9 });
+    const hairBack = new THREE.Mesh(
+      new THREE.SphereGeometry(1.23, 16, 16, 0, Math.PI * 2, Math.PI * 0.3, Math.PI * 0.5),
+      hairMat
+    );
+    hairBack.position.y = 0.1;
+    head.add(hairBack);
+
+    // Brille
+    const glassesMat = new THREE.MeshStandardMaterial({ color: glassesColor, roughness: 0.4 });
+    const lensGeo = new THREE.TorusGeometry(0.24, 0.03, 12, 24);
+    const lensL = new THREE.Mesh(lensGeo, glassesMat);
+    lensL.position.set(-0.35, 0.18, 1.12);
+    const lensR = new THREE.Mesh(lensGeo, glassesMat);
+    lensR.position.set(0.35, 0.18, 1.12);
+    const bridge = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.04, 0.03),
+      glassesMat
+    );
+    bridge.position.set(0, 0.22, 1.15);
+    head.add(lensL, lensR, bridge);
+
+    // Augen & Augenbrauen
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), eyeMat);
+    eyeL.position.set(-0.35, 0.18, 1.05);
+    const eyeR = eyeL.clone();
+    eyeR.position.x = 0.35;
+    
+    const browMat = new THREE.MeshStandardMaterial({ color: hairColor });
+    const browGeo = new THREE.BoxGeometry(0.28, 0.06, 0.06);
+    const browL = new THREE.Mesh(browGeo, browMat);
+    browL.position.set(-0.35, 0.34, 1.08);
+    browL.rotation.z = 0.1;
+    const browR = browL.clone();
+    browR.position.x = 0.35;
+    browR.rotation.z = -0.1;
+    head.add(eyeL, eyeR, browL, browR);
+
+    // Schnauzbart
+    const mustache = new THREE.Mesh(
+      new THREE.BoxGeometry(0.55, 0.12, 0.12),
+      new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.9 })
+    );
+    mustache.position.set(0, -0.22, 1.12);
+    head.add(mustache);
+
+    // Mund
+    const mouthMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, 0.08, 0.06),
+      new THREE.MeshStandardMaterial({ color: 0x8b3a3a })
+    );
+    mouthMesh.position.set(0, -0.42, 1.05);
+    head.add(mouthMesh);
+
+    // Hals, Kittel, Krawatte
+    const neck = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.38, 0.45, 0.5, 16),
+      new THREE.MeshStandardMaterial({ color: skinColor })
+    );
+    neck.position.set(0, -1.35, 0);
+    head.add(neck);
+
+    const shoulders = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.4, 1.7, 0.9, 24),
+      new THREE.MeshStandardMaterial({ color: coatColor })
+    );
+    shoulders.position.set(0, -1.95, 0);
+    head.add(shoulders);
+
+    const tie = new THREE.Mesh(
+      new THREE.BoxGeometry(0.2, 0.45, 0.05),
+      new THREE.MeshStandardMaterial({ color: tieColor })
+    );
+    tie.position.set(0, -1.75, 1.15);
+    head.add(tie);
+
+    scene.add(head);
+
+    function animate(t){
+      requestAnimationFrame(animate);
+      head.rotation.y = Math.sin(t / 1600) * 0.25;
+      head.rotation.x = Math.sin(t / 2200) * 0.08;
+      head.position.y = Math.sin(t / 800) * 0.04;
+      mouthMesh.scale.y = speaking3d ? (0.5 + Math.abs(Math.sin(t / 60)) * 2.2) : 1;
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
+  }
+  initAvatar3D();
+
   function speak(text){
     if (!('speechSynthesis' in window)) return;
     try{
@@ -248,7 +382,7 @@
       settings.classList.add('open');
       throw new Error('Bitte zuerst einen Gemini API-Key unter ⚙ eintragen.');
     }
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent', {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt }] }, contents })
@@ -258,8 +392,6 @@
     return data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '(keine Antwort erhalten)';
   }
 
-  // ---- Chat (Angepasst für kurze Sätze, keine Lösung verraten, genau 1 Frage) ----
-  const chatLog = document.getElementById('chatLog');
   const chatHistory = [];
   function addMsg(text, role){
     const div = document.createElement('div');
@@ -385,6 +517,6 @@
     }catch(e){ fb.textContent = 'Fehler: ' + e.message; }
   });
 })();
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</script>
 </body>
 </html>
