@@ -25,16 +25,21 @@
     background-size:4px 4px;
   }
   header{
-    display:flex; align-items:center; gap:14px;
-    padding:calc(env(safe-area-inset-top,0px) + 14px) 18px 14px;
-    border-bottom:1px dashed var(--border);
+    display:flex; align-items:center; gap:14px; justify-content:center;
+    padding:calc(env(safe-area-inset-top,0px) + 12px) 18px 4px;
     background:var(--bg-2); position:sticky; top:0; z-index:5;
   }
-  h1{font-family:'Kalam',cursive; font-size:1.4rem; margin:0; font-weight:700; line-height:1.15}
-  .sub{color:var(--chalk-dim); font-size:.82rem; margin-top:2px}
-  .gear{margin-left:auto; background:none; border:1px solid var(--border); color:var(--chalk);
+  h1{font-family:'Kalam',cursive; font-size:1.4rem; margin:0; font-weight:700; line-height:1.15; text-align:center}
+  .sub{color:var(--chalk-dim); font-size:.82rem; margin-top:2px; text-align:center}
+  .gear{position:absolute; right:14px; top:calc(env(safe-area-inset-top,0px) + 14px); background:none; border:1px solid var(--border); color:var(--chalk);
     width:38px; height:38px; border-radius:50%; cursor:pointer; font-size:1.1rem; flex-shrink:0}
   .gear:hover{border-color:var(--yellow)}
+
+  #avatarStage{
+    position:relative; display:flex; justify-content:center; align-items:center;
+    padding:4px 0 10px; background:var(--bg-2); border-bottom:1px dashed var(--border);
+  }
+  #avatar3d{ width:190px; height:190px; }
 
   #settings{
     background:var(--bg-2); border-bottom:1px dashed var(--border);
@@ -109,18 +114,23 @@
   svg#chartSvg{width:100%; height:auto; background:var(--bg-2); border-radius:8px}
 
   button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{outline:2px solid var(--blue)}
+  .katex{color:inherit; font-size:1.05em}
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 </head>
 <body>
 
 <header>
-  <div id="avatar3d" style="width:84px;height:84px;flex-shrink:0"></div>
   <div>
     <h1>Herr Hungers kleiner Helfer</h1>
     <div class="sub">dein Physik-Tutor</div>
   </div>
   <button class="gear" id="gearBtn" aria-label="Einstellungen" title="Einstellungen">⚙</button>
 </header>
+
+<div id="avatarStage">
+  <div id="avatar3d"></div>
+</div>
 
 <div id="settings">
   <label for="apiKey">Gemini API-Key</label>
@@ -195,8 +205,8 @@
   <button id="send" aria-label="Senden" title="Senden">➤</button>
 </footer>
 
-<!-- Three.js Bibliothek -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script>
 (function(){
   const chatLog = document.getElementById('chatLog');
@@ -221,6 +231,22 @@
     if (apiKey) settings.classList.remove('open');
   });
 
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function renderWithMath(text){
+    let out = escapeHtml(text);
+    out = out.replace(/\$\$([\s\S]+?)\$\$/g, (m, expr) => {
+      try { return typeof katex !== 'undefined' ? katex.renderToString(expr, { throwOnError: false, displayMode: true }) : m; }
+      catch(e){ return m; }
+    });
+    out = out.replace(/\$([^\$\n]+?)\$/g, (m, expr) => {
+      try { return typeof katex !== 'undefined' ? katex.renderToString(expr, { throwOnError: false, displayMode: false }) : m; }
+      catch(e){ return m; }
+    });
+    return out;
+  }
+
   // Tabs
   const tabs = document.querySelectorAll('nav button');
   const panels = { chat: document.getElementById('panel-chat'), diagram: document.getElementById('panel-diagram'), task: document.getElementById('panel-task') };
@@ -234,110 +260,102 @@
 
   let speaking3d = false;
   function setSpeaking(on){ speaking3d = on; }
-  
-  // ---- 3D Comic-Wissenschaftler Avatar (Nahaufnahme fürs Gesicht) ----
+
+  // ---- 3D-Avatar: Sprungfeder-Maskottchen ----
   function initAvatar3D(){
     const container = document.getElementById('avatar3d');
     if (!container || typeof THREE === 'undefined') return;
     let renderer;
     try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); }
     catch(e){ return; }
-    const w = 84, h = 84;
+    const w = 190, h = 190;
     renderer.setSize(w, h);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 3));
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    // Kamera VIEL NÄHER heranholen (Z-Wert von 7.0 auf 3.4 verringert für Großaufnahme)
-    const camera = new THREE.PerspectiveCamera(36, w / h, 0.1, 100);
-    camera.position.set(0, 0.1, 3.4);
+    const camera = new THREE.PerspectiveCamera(30, w / h, 0.1, 100);
+    camera.position.set(0, 0.05, 5.2);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-    const light = new THREE.DirectionalLight(0xffffff, 1.3);
-    light.position.set(2, 4, 4);
-    scene.add(light);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    keyLight.position.set(1.5, 1.2, 5);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xbcd8e8, 0.3);
+    fillLight.position.set(-3, 0.5, 2);
+    scene.add(fillLight);
+    if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+    if (THREE.ACESFilmicToneMapping){
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+    }
 
-    const head = new THREE.Group();
-    
-    const skinColor = 0xf5d0b1;
-    const hairColor = 0xd0d0d0;
-    const glassesColor = 0x222222;
+    const mascot = new THREE.Group();
 
-    // 1. Kopf-Basis (schön rund)
-    const headMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(1.1, 32, 32),
-      new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.5 })
-    );
-    head.add(headMesh);
+    const coilColor = 0xc3c8ce, faceColor = 0xffffff, pupilColor = 0x1a1a1a,
+          mouthColor = 0x8b4a3d, cheekColor = 0xe2896a, footColor = 0x333333;
+    const coilMat = new THREE.MeshStandardMaterial({ color: coilColor, roughness: 0.35, metalness: 0.7 });
 
-    // 2. Haarkranz an den Seiten
-    const hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.8 });
-    const hairBack = new THREE.Mesh(
-      new THREE.SphereGeometry(1.13, 16, 16, 0, Math.PI * 2, Math.PI * 0.25, Math.PI * 0.55),
-      hairMat
-    );
-    hairBack.position.y = 0.15;
-    head.add(hairBack);
+    // Sprungfeder: gestapelte Ringe von unten nach oben
+    const numRings = 7, ringRadius = 0.62, tubeRadius = 0.1, totalHeight = 1.85;
+    const step = totalHeight / (numRings - 1);
+    const coilGroup = new THREE.Group();
+    for (let i = 0; i < numRings; i++){
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(ringRadius, tubeRadius, 14, 28), coilMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = -totalHeight / 2 + i * step;
+      coilGroup.add(ring);
+    }
+    mascot.add(coilGroup);
 
-    // 3. Große Comic-Brille (gut sichtbar)
-    const glassesMat = new THREE.MeshStandardMaterial({ color: glassesColor, roughness: 0.3 });
-    const lensGeo = new THREE.TorusGeometry(0.28, 0.04, 12, 24);
-    
-    const lensL = new THREE.Mesh(lensGeo, glassesMat);
-    lensL.position.set(-0.38, 0.2, 0.98);
-    
-    const lensR = new THREE.Mesh(lensGeo, glassesMat);
-    lensR.position.set(0.38, 0.2, 0.98);
-    
-    const bridge = new THREE.Mesh(
-      new THREE.BoxGeometry(0.24, 0.05, 0.04),
-      glassesMat
-    );
-    bridge.position.set(0, 0.26, 1.02);
-    head.add(lensL, lensR, bridge);
+    const topY = totalHeight / 2;
 
-    // 4. Große Augen & buschige Augenbrauen
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), eyeMat);
-    eyeL.position.set(-0.38, 0.2, 0.9);
-    const eyeR = eyeL.clone();
-    eyeR.position.x = 0.38;
-    
-    const browGeo = new THREE.BoxGeometry(0.32, 0.07, 0.07);
-    const browL = new THREE.Mesh(browGeo, hairMat);
-    browL.position.set(-0.38, 0.42, 0.95);
-    browL.rotation.z = 0.15;
-    const browR = browL.clone();
-    browR.position.x = 0.38;
-    browR.rotation.z = -0.15;
-    head.add(eyeL, eyeR, browL, browR);
+    // Gesicht: große Augen oben auf der Feder
+    const eyeY = topY + 0.05, eyeX = 0.32, eyeZ = ringRadius * 0.72;
+    const eyeGeo = new THREE.SphereGeometry(0.24, 20, 20);
+    const eyeMat = new THREE.MeshStandardMaterial({ color: faceColor, roughness: 0.5 });
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-eyeX, eyeY, eyeZ);
+    const eyeR = eyeL.clone(); eyeR.position.x = eyeX;
+    mascot.add(eyeL, eyeR);
 
-    // 5. Großer Schnauzbart
-    const mustache = new THREE.Mesh(
-      new THREE.BoxGeometry(0.65, 0.16, 0.15),
-      hairMat
-    );
-    mustache.position.set(0, -0.18, 0.98);
-    head.add(mustache);
+    const pupilGeo = new THREE.SphereGeometry(0.11, 14, 14);
+    const pupilMat = new THREE.MeshStandardMaterial({ color: pupilColor });
+    const pupilL = new THREE.Mesh(pupilGeo, pupilMat); pupilL.position.set(-eyeX, eyeY, eyeZ + 0.2);
+    const pupilR = pupilL.clone(); pupilR.position.x = eyeX;
+    mascot.add(pupilL, pupilR);
 
-    // 6. Beweglicher Comic-Mund
+    // Wangen
+    const cheekGeo = new THREE.SphereGeometry(0.1, 12, 12);
+    const cheekMat = new THREE.MeshStandardMaterial({ color: cheekColor, roughness: 0.8 });
+    const cheekL = new THREE.Mesh(cheekGeo, cheekMat); cheekL.position.set(-0.5, eyeY - 0.28, eyeZ - 0.05);
+    const cheekR = cheekL.clone(); cheekR.position.x = 0.5;
+    mascot.add(cheekL, cheekR);
+
+    // Mund
     const mouthMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.32, 0.1, 0.08),
-      new THREE.MeshStandardMaterial({ color: 0x8b3a3a })
+      new THREE.BoxGeometry(0.34, 0.09, 0.08),
+      new THREE.MeshStandardMaterial({ color: mouthColor })
     );
-    mouthMesh.position.set(0, -0.4, 0.92);
-    head.add(mouthMesh);
+    mouthMesh.position.set(0, eyeY - 0.42, eyeZ + 0.02);
+    mascot.add(mouthMesh);
 
+    // Kleine Füße unten
+    const footGeo = new THREE.SphereGeometry(0.14, 12, 12);
+    const footMat = new THREE.MeshStandardMaterial({ color: footColor, roughness: 0.6 });
+    const footL = new THREE.Mesh(footGeo, footMat); footL.scale.set(1.3, 0.6, 1); footL.position.set(-0.32, -topY - 0.05, 0.15);
+    const footR = footL.clone(); footR.position.x = 0.32;
+    mascot.add(footL, footR);
+
+    const head = mascot;
     scene.add(head);
 
-    // Dezente Animation, damit es lebendig wirkt
     function animate(t){
       requestAnimationFrame(animate);
-      head.rotation.y = Math.sin(t / 1800) * 0.15;
-      head.rotation.x = Math.sin(t / 2400) * 0.06;
-      
-      // Mundbewegung beim Sprechen
-      mouthMesh.scale.y = speaking3d ? (0.6 + Math.abs(Math.sin(t / 50)) * 2.5) : 1;
+      const squish = 1 + Math.sin(t / 550) * 0.06;
+      coilGroup.scale.y = squish;
+      head.position.y = (1 - squish) * (totalHeight / 2) * -1 * 0.5;
+      head.rotation.y = Math.sin(t / 2400) * 0.12;
+      mouthMesh.scale.y = speaking3d ? (0.6 + Math.abs(Math.sin(t / 60)) * 2.2) : 1;
       renderer.render(scene, camera);
     }
     requestAnimationFrame(animate);
@@ -376,7 +394,8 @@
   function addMsg(text, role){
     const div = document.createElement('div');
     div.className = 'msg ' + role;
-    div.textContent = text;
+    if (role === 'user') div.textContent = text;
+    else div.innerHTML = renderWithMath(text);
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
     return div;
@@ -385,11 +404,12 @@
 
   const CHAT_SYSTEM = 'Du bist Herr Hungers kleiner Helfer, ein geduldiger Physik-Tutor für Schüler der 11. Klasse. ' +
     'Themen sind Dynamik, Kräfte und einfache Maschinen. ' +
-    'HALTE DICH ANFOLGENDE ABSOLUTE REGELN: ' +
+    'HALTE DICH AN FOLGENDE ABSOLUTE REGELN: ' +
     '1. Verwende einfache Sprache und sehr kurze Sätze (maximal drei Sätze insgesamt). ' +
     '2. Gib NIEMALS eine Formel, eine direkte Antwort oder den Lösungsweg vor – auch dann nicht, wenn der Schüler direkt danach fragt oder bettelt ("Wie lautet die Formel?"). ' +
     '3. Wenn der Schüler nach einer Formel fragt, antworte stattdessen mit einer Gegenfrage oder einem Alltagsbeispiel, das ihn selbst darauf kommen lässt. ' +
-    '4. Beende deine Antwort IMMER mit genau einer offenen Frage und stelle niemals mehr als eine Frage.';
+    '4. Beende deine Antwort IMMER mit genau einer offenen Frage und stelle niemals mehr als eine Frage. ' +
+    '5. Falls doch einmal eine Formel oder Variable vorkommt, schreibe sie in LaTeX zwischen Dollarzeichen (z. B. $v = \\frac{s}{t}$), niemals ausgeschrieben in Worten.';
 
   async function sendCurrent(){
     const text = textInput.value.trim();
@@ -400,7 +420,7 @@
     const thinking = addMsg('…', 'bot');
     try{
       const answer = await callGemini(CHAT_SYSTEM, chatHistory);
-      thinking.textContent = answer;
+      thinking.innerHTML = renderWithMath(answer);
       chatHistory.push({ role: 'model', parts: [{ text: answer }] });
       chatLog.scrollTop = chatLog.scrollHeight;
       speak(answer);
@@ -477,9 +497,10 @@
     document.getElementById('answerInput').value = '';
     try{
       const prompt = 'Formuliere genau eine Physik-Übungsaufgabe zum Thema "' + topic + '" im Schwierigkeitsgrad "' + level +
-        '" für Schüler der 9. Klasse. Nur die Aufgabenstellung, keine Lösung, keine Einleitung, kein Markdown.';
+        '" für Schüler der 9. Klasse. Nur die Aufgabenstellung, keine Lösung, keine Einleitung, kein Markdown. ' +
+        'Zahlenwerte und Einheiten normal im Text, aber falls eine Formel oder Variable vorkommt, in LaTeX zwischen Dollarzeichen (z. B. $F = m \\cdot a$).';
       currentTask = await callGemini('Du bist Herr Hungers kleiner Helfer, ein Physik-Tutor, der klare Übungsaufgaben stellt.', [{ role: 'user', parts: [{ text: prompt }] }]);
-      taskTextEl.textContent = currentTask;
+      taskTextEl.innerHTML = renderWithMath(currentTask);
     }catch(e){ taskTextEl.textContent = 'Fehler: ' + e.message; }
   });
 
@@ -490,9 +511,9 @@
     fb.textContent = 'Wird geprüft…';
     try{
       const prompt = 'Aufgabe: ' + currentTask + '\n\nAntwort des Schülers: ' + answer +
-        '\n\nPrüfe die Antwort. Verrate NICHT die komplette Lösung, sondern gib nur einen kurzen Tipp in maximal 3 Sätzen, ob es stimmt oder wo der Fehler liegt. Beende deine Rückmeldung mit genau einer Frage. Auf Deutsch, ohne Markdown.';
+        '\n\nPrüfe die Antwort. Verrate NICHT die komplette Lösung, sondern gib nur einen kurzen Tipp in maximal 3 Sätzen, ob es stimmt oder wo der Fehler liegt. Beende deine Rückmeldung mit genau einer Frage. Auf Deutsch, ohne Markdown. Falls du eine Formel oder Variable nennst, schreibe sie in LaTeX zwischen Dollarzeichen (z. B. $a = \\frac{F}{m}$).';
       const result = await callGemini('Du bist Herr Hungers kleiner Helfer, ein geduldiger Physik-Tutor, der Antworten konstruktiv und ohne Lösung bewertet.', [{ role: 'user', parts: [{ text: prompt }] }]);
-      fb.textContent = result;
+      fb.innerHTML = renderWithMath(result);
       speak(result);
     }catch(e){ fb.textContent = 'Fehler: ' + e.message; }
   });
