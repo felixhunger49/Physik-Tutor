@@ -136,7 +136,9 @@
   <label for="apiKey">Gemini API-Key</label>
   <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off">
   <button id="saveKey">Speichern</button>
-  <p id="settingsHint">Dein Key bleibt nur in diesem Browser gespeichert. Einen kostenlosen Key gibt's in Google AI Studio.</p>
+  <label for="voiceSelect" style="margin-left:8px">Stimme</label>
+  <select id="voiceSelect" style="flex:1; min-width:180px; background:var(--panel); border:1px solid var(--border); color:var(--chalk); padding:8px 10px; border-radius:6px; font-family:inherit; font-size:.85rem;"></select>
+  <p id="settingsHint">Dein Key bleibt nur in diesem Browser gespeichert. Einen kostenlosen Key gibt's in Google AI Studio. Bei der Stimme liefert Chrome meist die natürlichsten Optionen.</p>
 </div>
 
 <nav>
@@ -158,4 +160,440 @@
 0.2,0.2
 0.4,0.78"></textarea>
       <input type="text" id="chartLabel" placeholder="Achsentitel, z. B. Zeit (s) / Strecke (m)" style="margin-top:8px">
-      <button class="actionBtn" id="plotBtn">Diagramm
+      <button class="actionBtn" id="plotBtn">Diagramm erstellen</button>
+    </div>
+    <div id="chartWrap" style="display:none">
+      <svg id="chartSvg" viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-task">
+    <div class="box">
+      <h2>Physikaufgabe üben</h2>
+      <p class="hint">Wähle ein Thema und eine Schwierigkeit, dann bekommst du eine Aufgabe gestellt.</p>
+      <select id="taskTopic">
+        <option>Mechanik / Kinematik</option>
+        <option>Kräfte &amp; Newtonsche Gesetze</option>
+        <option>Energie &amp; Arbeit</option>
+        <option>Elektrizität</option>
+        <option>Optik</option>
+        <option>Wärmelehre</option>
+      </select>
+      <select id="taskLevel" style="margin-top:8px">
+        <option>leicht</option>
+        <option>mittel</option>
+        <option>schwer</option>
+      </select>
+      <button class="actionBtn" id="newTaskBtn">Neue Aufgabe stellen</button>
+    </div>
+    <div id="taskArea" style="display:none">
+      <div class="box">
+        <h2>Aufgabe</h2>
+        <div id="taskText"></div>
+      </div>
+      <div class="box">
+        <h2>Deine Antwort</h2>
+        <textarea id="answerInput" rows="3" placeholder="Trag hier deinen Lösungsweg und dein Ergebnis ein…"></textarea>
+        <button class="actionBtn" id="checkAnswerBtn">Antwort prüfen</button>
+        <div id="taskFeedback"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer id="chatFooter">
+  <button id="mic" aria-label="Spracheingabe" title="Spracheingabe">🎤</button>
+  <input id="textInput" type="text" placeholder="Stell mir eine Physikfrage…" autocomplete="off">
+  <button id="send" aria-label="Senden" title="Senden">➤</button>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script>
+(function(){
+  const chatLog = document.getElementById('chatLog');
+  const textInput = document.getElementById('textInput');
+  const sendBtn = document.getElementById('send');
+  const micBtn = document.getElementById('mic');
+  const gearBtn = document.getElementById('gearBtn');
+  const settings = document.getElementById('settings');
+  const apiKeyInput = document.getElementById('apiKey');
+  const saveKeyBtn = document.getElementById('saveKey');
+  const chatFooter = document.getElementById('chatFooter');
+
+  let apiKey = '';
+  try { apiKey = localStorage.getItem('newtonGeminiKey') || ''; } catch(e){}
+  if (apiKey) apiKeyInput.value = apiKey;
+  else settings.classList.add('open');
+
+  gearBtn.addEventListener('click', () => settings.classList.toggle('open'));
+  saveKeyBtn.addEventListener('click', () => {
+    apiKey = apiKeyInput.value.trim();
+    try { localStorage.setItem('newtonGeminiKey', apiKey); } catch(e){}
+    if (apiKey) settings.classList.remove('open');
+  });
+
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function renderWithMath(text){
+    let out = escapeHtml(text);
+    out = out.replace(/\$\$([\s\S]+?)\$\$/g, (m, expr) => {
+      try { return typeof katex !== 'undefined' ? katex.renderToString(expr, { throwOnError: false, displayMode: true }) : m; }
+      catch(e){ return m; }
+    });
+    out = out.replace(/\$([^\$\n]+?)\$/g, (m, expr) => {
+      try { return typeof katex !== 'undefined' ? katex.renderToString(expr, { throwOnError: false, displayMode: false }) : m; }
+      catch(e){ return m; }
+    });
+    return out;
+  }
+
+  // Tabs
+  const tabs = document.querySelectorAll('nav button');
+  const panels = { chat: document.getElementById('panel-chat'), diagram: document.getElementById('panel-diagram'), task: document.getElementById('panel-task') };
+  tabs.forEach(btn => btn.addEventListener('click', () => {
+    tabs.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    Object.values(panels).forEach(p => p.classList.remove('active'));
+    panels[btn.dataset.tab].classList.add('active');
+    chatFooter.style.display = btn.dataset.tab === 'chat' ? 'flex' : 'none';
+  }));
+
+  let speaking3d = false;
+  function setSpeaking(on){ speaking3d = on; }
+
+  // ---- 3D-Avatar: Sprungfeder-Maskottchen ----
+  function initAvatar3D(){
+    const container = document.getElementById('avatar3d');
+    if (!container || typeof THREE === 'undefined') return;
+    let renderer;
+    try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); }
+    catch(e){ return; }
+    const w = 190, h = 190;
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 3));
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(30, w / h, 0.1, 100);
+    camera.position.set(0, 0.05, 5.2);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    keyLight.position.set(1.5, 1.2, 5);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xbcd8e8, 0.3);
+    fillLight.position.set(-3, 0.5, 2);
+    scene.add(fillLight);
+    if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+    if (THREE.ACESFilmicToneMapping){
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+    }
+
+    const mascot = new THREE.Group();
+
+    const coilColor = 0xc3c8ce, faceColor = 0xffffff, pupilColor = 0x1a1a1a,
+          mouthColor = 0x8b4a3d, cheekColor = 0xe2896a, footColor = 0x333333;
+    const coilMat = new THREE.MeshStandardMaterial({ color: coilColor, roughness: 0.35, metalness: 0.7 });
+
+    // Sprungfeder: gestapelte Ringe von unten nach oben
+    const numRings = 7, ringRadius = 0.62, tubeRadius = 0.1, totalHeight = 1.85;
+    const step = totalHeight / (numRings - 1);
+    const coilGroup = new THREE.Group();
+    for (let i = 0; i < numRings; i++){
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(ringRadius, tubeRadius, 14, 28), coilMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = -totalHeight / 2 + i * step;
+      coilGroup.add(ring);
+    }
+    mascot.add(coilGroup);
+
+    const topY = totalHeight / 2;
+
+    // Gesicht: große Augen oben auf der Feder
+    const eyeY = topY + 0.05, eyeX = 0.32, eyeZ = ringRadius * 0.72;
+    const eyeGeo = new THREE.SphereGeometry(0.24, 20, 20);
+    const eyeMat = new THREE.MeshStandardMaterial({ color: faceColor, roughness: 0.5 });
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-eyeX, eyeY, eyeZ);
+    const eyeR = eyeL.clone(); eyeR.position.x = eyeX;
+    mascot.add(eyeL, eyeR);
+
+    const pupilGeo = new THREE.SphereGeometry(0.11, 14, 14);
+    const pupilMat = new THREE.MeshStandardMaterial({ color: pupilColor });
+    const pupilL = new THREE.Mesh(pupilGeo, pupilMat); pupilL.position.set(-eyeX, eyeY, eyeZ + 0.2);
+    const pupilR = pupilL.clone(); pupilR.position.x = eyeX;
+    mascot.add(pupilL, pupilR);
+
+    // Wangen
+    const cheekGeo = new THREE.SphereGeometry(0.1, 12, 12);
+    const cheekMat = new THREE.MeshStandardMaterial({ color: cheekColor, roughness: 0.8 });
+    const cheekL = new THREE.Mesh(cheekGeo, cheekMat); cheekL.position.set(-0.5, eyeY - 0.28, eyeZ - 0.05);
+    const cheekR = cheekL.clone(); cheekR.position.x = 0.5;
+    mascot.add(cheekL, cheekR);
+
+    // Mund
+    const mouthMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.34, 0.09, 0.08),
+      new THREE.MeshStandardMaterial({ color: mouthColor })
+    );
+    mouthMesh.position.set(0, eyeY - 0.42, eyeZ + 0.02);
+    mascot.add(mouthMesh);
+
+    // Kleine Füße unten
+    const footGeo = new THREE.SphereGeometry(0.14, 12, 12);
+    const footMat = new THREE.MeshStandardMaterial({ color: footColor, roughness: 0.6 });
+    const footL = new THREE.Mesh(footGeo, footMat); footL.scale.set(1.3, 0.6, 1); footL.position.set(-0.32, -topY - 0.05, 0.15);
+    const footR = footL.clone(); footR.position.x = 0.32;
+    mascot.add(footL, footR);
+
+    const head = mascot;
+    scene.add(head);
+
+    function animate(t){
+      requestAnimationFrame(animate);
+      const squish = 1 + Math.sin(t / 550) * 0.06;
+      coilGroup.scale.y = squish;
+      head.position.y = (1 - squish) * (totalHeight / 2) * -1 * 0.5;
+      head.rotation.y = Math.sin(t / 2400) * 0.12;
+      mouthMesh.scale.y = speaking3d ? (0.6 + Math.abs(Math.sin(t / 60)) * 2.2) : 1;
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
+  }
+  initAvatar3D();
+
+  const voiceSelect = document.getElementById('voiceSelect');
+  let savedVoiceURI = '';
+  try { savedVoiceURI = localStorage.getItem('newtonVoiceURI') || ''; } catch(e){}
+
+  function pickBestGermanVoice(voices){
+    const de = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('de'));
+    if (!de.length) return null;
+    const byName = (re) => de.find(v => re.test(v.name));
+    return byName(/Google.*Deutsch/i) || byName(/Google/i) || byName(/Natural|Neural/i) ||
+           de.find(v => !v.localService) || de[0];
+  }
+
+  function populateVoices(){
+    if (!('speechSynthesis' in window)) return;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return;
+    voiceSelect.innerHTML = '';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = 'Automatisch (beste verfügbare)';
+    voiceSelect.appendChild(defaultOpt);
+    voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('de')).forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.voiceURI;
+      opt.textContent = v.name + (v.localService ? '' : ' (Online)');
+      if (v.voiceURI === savedVoiceURI) opt.selected = true;
+      voiceSelect.appendChild(opt);
+    });
+  }
+  populateVoices();
+  if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = populateVoices;
+  voiceSelect.addEventListener('change', () => {
+    savedVoiceURI = voiceSelect.value;
+    try { localStorage.setItem('newtonVoiceURI', savedVoiceURI); } catch(e){}
+  });
+
+  function speak(text){
+    if (!('speechSynthesis' in window)) return;
+    try{
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'de-DE';
+      u.rate = 0.97;
+      u.pitch = 1.0;
+      const voices = window.speechSynthesis.getVoices();
+      let chosen = savedVoiceURI ? voices.find(v => v.voiceURI === savedVoiceURI) : null;
+      if (!chosen) chosen = pickBestGermanVoice(voices);
+      if (chosen) u.voice = chosen;
+      let iv;
+      u.onstart = () => { iv = setInterval(() => setSpeaking(Math.random() > .4), 130); };
+      u.onend = u.onerror = () => { clearInterval(iv); setSpeaking(false); };
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+
+  function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+  function isRetryable(status, message){
+    if (status === 429 || status === 503) return true;
+    const m = (message || '').toLowerCase();
+    return m.includes('overloaded') || m.includes('high demand') || m.includes('quota') ||
+           m.includes('resource_exhausted') || m.includes('unavailable');
+  }
+
+  async function callGemini(systemPrompt, contents, onRetry){
+    if (!apiKey){
+      settings.classList.add('open');
+      throw new Error('Bitte zuerst einen Gemini API-Key unter ⚙ eintragen.');
+    }
+    const maxAttempts = 4;
+    const delays = [2000, 4000, 8000];
+    let lastError;
+    for (let attempt = 0; attempt < maxAttempts; attempt++){
+      try{
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+          body: JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt }] }, contents })
+        });
+        const data = await res.json();
+        if (!res.ok){
+          const msg = data?.error?.message || ('HTTP ' + res.status);
+          if (attempt < maxAttempts - 1 && isRetryable(res.status, msg)){
+            if (onRetry) onRetry(attempt + 1);
+            await sleep(delays[attempt]);
+            continue;
+          }
+          throw new Error(msg);
+        }
+        return data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '(keine Antwort erhalten)';
+      }catch(e){
+        lastError = e;
+        if (attempt < maxAttempts - 1 && isRetryable(null, e.message)){
+          if (onRetry) onRetry(attempt + 1);
+          await sleep(delays[attempt]);
+          continue;
+        }
+        throw e;
+      }
+    }
+    throw lastError;
+  }
+
+  const chatHistory = [];
+  function addMsg(text, role){
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    if (role === 'user') div.textContent = text;
+    else div.innerHTML = renderWithMath(text);
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+    return div;
+  }
+  addMsg('Hallo, Herr Hunger ist gerade bei einem anderen Schüler, aber ich kann dir auch gerne helfen. Was ist deine Frage?', 'bot');
+
+  const CHAT_SYSTEM = 'Du bist Herr Hungers kleiner Helfer, ein geduldiger Physik-Tutor für Schüler der 11. Klasse. ' +
+    'Themen sind Dynamik, Kräfte und einfache Maschinen. ' +
+    'HALTE DICH AN FOLGENDE ABSOLUTE REGELN: ' +
+    '1. Verwende einfache Sprache und sehr kurze Sätze (maximal drei Sätze insgesamt). ' +
+    '2. Gib NIEMALS eine Formel, eine direkte Antwort oder den Lösungsweg vor – auch dann nicht, wenn der Schüler direkt danach fragt oder bettelt ("Wie lautet die Formel?"). ' +
+    '3. Wenn der Schüler nach einer Formel fragt, antworte stattdessen mit einer Gegenfrage oder einem Alltagsbeispiel, das ihn selbst darauf kommen lässt. ' +
+    '4. Beende deine Antwort IMMER mit genau einer offenen Frage und stelle niemals mehr als eine Frage. ' +
+    '5. Falls doch einmal eine Formel oder Variable vorkommt, schreibe sie in LaTeX zwischen Dollarzeichen (z. B. $v = \\frac{s}{t}$), niemals ausgeschrieben in Worten.';
+
+  async function sendCurrent(){
+    const text = textInput.value.trim();
+    if (!text) return;
+    addMsg(text, 'user');
+    textInput.value = '';
+    chatHistory.push({ role: 'user', parts: [{ text }] });
+    const thinking = addMsg('…', 'bot');
+    try{
+      const answer = await callGemini(CHAT_SYSTEM, chatHistory, () => { thinking.textContent = 'Kurz überlastet, versuche es nochmal…'; });
+      thinking.innerHTML = renderWithMath(answer);
+      chatHistory.push({ role: 'model', parts: [{ text: answer }] });
+      chatLog.scrollTop = chatLog.scrollHeight;
+      speak(answer);
+    }catch(e){
+      thinking.remove();
+      addMsg('Fehler: ' + e.message, 'err');
+      chatHistory.pop();
+    }
+  }
+  sendBtn.addEventListener('click', sendCurrent);
+  textInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendCurrent(); });
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR){
+    const rec = new SR();
+    rec.lang = 'de-DE';
+    rec.interimResults = false;
+    let listening = false;
+    micBtn.addEventListener('click', () => {
+      if (listening) { rec.stop(); return; }
+      try { rec.start(); listening = true; micBtn.classList.add('listening'); } catch(e){}
+    });
+    rec.onresult = (ev) => { textInput.value = ev.results[0][0].transcript; sendCurrent(); };
+    rec.onend = () => { listening = false; micBtn.classList.remove('listening'); };
+    rec.onerror = () => { listening = false; micBtn.classList.remove('listening'); };
+  } else {
+    micBtn.disabled = true;
+    micBtn.title = 'Spracheingabe wird von diesem Browser nicht unterstützt';
+  }
+
+  // ---- Diagramm ----
+  document.getElementById('plotBtn').addEventListener('click', () => {
+    const raw = document.getElementById('dataInput').value.trim();
+    const label = document.getElementById('chartLabel').value.trim();
+    const pts = raw.split('\n').map(l => l.split(',').map(Number)).filter(p => p.length === 2 && p.every(n => !isNaN(n)));
+    if (pts.length < 2){ alert('Bitte mindestens zwei gültige Wertepaare eingeben (x,y pro Zeile).'); return; }
+    drawChart(pts, label);
+  });
+
+  function drawChart(pts, label){
+    const svg = document.getElementById('chartSvg');
+    document.getElementById('chartWrap').style.display = 'block';
+    const W = 400, H = 260, PAD = 34;
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const xMin = Math.min(...xs), xMax = Math.max(...xs);
+    const yMin = Math.min(0, ...ys), yMax = Math.max(...ys);
+    const xr = (xMax - xMin) || 1, yr = (yMax - yMin) || 1;
+    const sx = x => PAD + (x - xMin) / xr * (W - 2 * PAD);
+    const sy = y => H - PAD - (y - yMin) / yr * (H - 2 * PAD);
+    let s = '';
+    s += `<line x1="${PAD}" y1="${H-PAD}" x2="${W-PAD}" y2="${H-PAD}" stroke="var(--chalk-dim)" stroke-width="1"/>`;
+    s += `<line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${H-PAD}" stroke="var(--chalk-dim)" stroke-width="1"/>`;
+    const poly = pts.map(p => sx(p[0]) + ',' + sy(p[1])).join(' ');
+    s += `<polyline points="${poly}" fill="none" stroke="var(--blue)" stroke-width="2.5"/>`;
+    pts.forEach(p => {
+      const cx = sx(p[0]), cy = sy(p[1]), cs = 3.5;
+      s += `<line x1="${cx-cs}" y1="${cy-cs}" x2="${cx+cs}" y2="${cy+cs}" stroke="var(--yellow)" stroke-width="1.3"/>`;
+      s += `<line x1="${cx-cs}" y1="${cy+cs}" x2="${cx+cs}" y2="${cy-cs}" stroke="var(--yellow)" stroke-width="1.3"/>`;
+    });
+    if (label){ s += `<text x="${W/2}" y="16" fill="var(--chalk)" font-size="11" text-anchor="middle" font-family="Inter">${label.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</text>`; }
+    svg.innerHTML = s;
+  }
+
+  // ---- Aufgabe ----
+  let currentTask = '';
+  document.getElementById('newTaskBtn').addEventListener('click', async () => {
+    const topic = document.getElementById('taskTopic').value;
+    const level = document.getElementById('taskLevel').value;
+    const taskTextEl = document.getElementById('taskText');
+    const taskArea = document.getElementById('taskArea');
+    taskArea.style.display = 'block';
+    taskTextEl.textContent = 'Aufgabe wird erstellt…';
+    document.getElementById('taskFeedback').textContent = '';
+    document.getElementById('answerInput').value = '';
+    try{
+      const prompt = 'Formuliere genau eine Physik-Übungsaufgabe zum Thema "' + topic + '" im Schwierigkeitsgrad "' + level +
+        '" für Schüler der 9. Klasse. Nur die Aufgabenstellung, keine Lösung, keine Einleitung, kein Markdown. ' +
+        'Zahlenwerte und Einheiten normal im Text, aber falls eine Formel oder Variable vorkommt, in LaTeX zwischen Dollarzeichen (z. B. $F = m \\cdot a$).';
+      currentTask = await callGemini('Du bist Herr Hungers kleiner Helfer, ein Physik-Tutor, der klare Übungsaufgaben stellt.', [{ role: 'user', parts: [{ text: prompt }] }], () => { taskTextEl.textContent = 'Kurz überlastet, versuche es nochmal…'; });
+      taskTextEl.innerHTML = renderWithMath(currentTask);
+    }catch(e){ taskTextEl.textContent = 'Fehler: ' + e.message; }
+  });
+
+  document.getElementById('checkAnswerBtn').addEventListener('click', async () => {
+    const answer = document.getElementById('answerInput').value.trim();
+    const fb = document.getElementById('taskFeedback');
+    if (!answer){ fb.textContent = 'Bitte trag zuerst eine Antwort ein.'; return; }
+    fb.textContent = 'Wird geprüft…';
+    try{
+      const prompt = 'Aufgabe: ' + currentTask + '\n\nAntwort des Schülers: ' + answer +
+        '\n\nPrüfe die Antwort. Verrate NICHT die komplette Lösung, sondern gib nur einen kurzen Tipp in maximal 3 Sätzen, ob es stimmt oder wo der Fehler liegt. Beende deine Rückmeldung mit genau einer Frage. Auf Deutsch, ohne Markdown. Falls du eine Formel oder Variable nennst, schreibe sie in LaTeX zwischen Dollarzeichen (z. B. $a = \\frac{F}{m}$).';
+      const result = await callGemini('Du bist Herr Hungers kleiner Helfer, ein geduldiger Physik-Tutor, der Antworten konstruktiv und ohne Lösung bewertet.', [{ role: 'user', parts: [{ text: prompt }] }], () => { fb.textContent = 'Kurz überlastet, versuche es nochmal…'; });
+      fb.innerHTML = renderWithMath(result);
+      speak(result);
+    }catch(e){ fb.textContent = 'Fehler: ' + e.message; }
+  });
+})();
+</script>
+</body>
+</html>
